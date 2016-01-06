@@ -1,6 +1,7 @@
 #include <stdio.h>
 #include <math.h>
 #include <errno.h>
+#include <string.h>
 
 typedef struct {
 	unsigned int block_count:32;
