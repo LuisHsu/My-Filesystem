@@ -5,21 +5,40 @@
 static FILE *mountPoint = NULL;
 
 int	myfs_create(const char *filesystemname, int max_size){
+	// Open file 
 	if(!(mountPoint = fopen(filesystemname,"w+"))){
 		return -1;
 	}
-	unsigned int inode_count,inode_section,actual_KB;
+	// Calculate actual size of each section
+	unsigned int inode_count,inode_section,block_count;
 	if(max_size<2048){
 		inode_section = ((unsigned int)((max_size<<11)/1341.0))*512*INODE_SIZE;
-		actual_KB = (max_size<<10)-(inode_section>>10);
+		block_count = (max_size<<10)-(inode_section>>10);
 		inode_count = inode_section/INODE_SIZE;
 	}else{
 		inode_section = ((unsigned int)(max_size/1341.0))*1048576*INODE_SIZE;
-		actual_KB = (max_size-(inode_section>>20))<<10;
+		block_count = (max_size-(inode_section>>20))<<10;
 		inode_count = inode_section/INODE_SIZE;
-	}	
-	printf("Actual_size: %u(KB),%.2f(MB)\n",actual_KB,actual_KB/1024.0);
-	printf("Inode count: %u\nInode section size: %u(B), %.2f(MB)\n",inode_count,inode_section,inode_section/1048576.0);
+	}
+	
+	// Write Superblock
+	union{
+		unsigned char bytes[20];
+		Superblock block;
+	}u_Superblock;
+	u_Superblock.block.block_count = block_count;
+	u_Superblock.block.block_unused= block_count;
+	u_Superblock.block.inode_section_size = inode_section;
+	u_Superblock.block.inode_count = 0;
+	u_Superblock.block.inode_count += inode_count;
+	u_Superblock.block.inode_unused= 0;
+	u_Superblock.block.inode_unused+= inode_count;
+
+	for (int i = 0; i < 20; i++) {
+		fprintf(mountPoint, "%c",u_Superblock.bytes[i]);
+	}
+	
+	myfs_umount();
 	return 0;
 }
 
@@ -36,6 +55,7 @@ int myfs_umount(){
 		if(fclose(mountPoint)==EOF){
 			return -1;
 		}
+		mountPoint = NULL;
 		return 0;
 	}
 	return 1;

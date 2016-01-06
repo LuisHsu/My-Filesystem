@@ -2,13 +2,13 @@
 
 /*** Create filesystem ***/
 /* It will create a virtual disk file with the filesystem,
- * and mount it automatically
+ * but not mount it.
  * If the virtual disk file is exist, it will re-format it.
  */
 int myfs_create(const char *filesystemname, int max_size);
 
 /*** Destroy filesystem ***/
-/* It will unmount the filesystem automatically
+/* It will unmount the filesystem if mounted
  * and destroy the virtual disk file with it
  */
 int myfs_destroy(const char *filesystemname);
