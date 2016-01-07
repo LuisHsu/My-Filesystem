@@ -4,9 +4,13 @@
 #include "myfs.h"
 
 void show_help();
+int on_exit();
+void trimFilename(char *filename);
 
 void create_format();
-int on_exit();
+void destroy();
+void mountfs();
+void umountfs();
 
 int main(int argc, const char *argv[])
 {
@@ -25,6 +29,18 @@ int main(int argc, const char *argv[])
 			while(getchar()!='\n');
 			create_format();
 		}
+		if(!strcmp(Command,"destroy")){
+			while(getchar()!='\n');
+			destroy();
+		}
+		if(!strcmp(Command,"mount")){
+			while(getchar()!='\n');
+			mountfs();
+		}
+		if(!strcmp(Command,"umount")){
+			while(getchar()!='\n');
+			umountfs();
+		}
 	}
 	return 0;
 }
@@ -33,8 +49,22 @@ void show_help(){
 	printf(
 	"=== Myfs Manager ===\n"
 	"Command List:\n"
-	"create\tformat\texit\n"
+	"create\tformat\tdestroy\n"
+	"mount\tumount\texit\n"
 	);
+}
+
+void trimFilename(char *filename){
+	int newline=0;
+	for(int i=0;i<256;++i){
+		if(!newline){
+			if(filename[i]=='\n'){
+				filename[i]='\0';
+			}
+		}else{
+			filename[i]='\0';
+		}	
+	}	
 }
 
 int on_exit(){
@@ -55,16 +85,7 @@ void create_format(){
 		if(fgets(filename,256,stdin)==NULL){
 			printf("Input error!\n");
 		}else{
-			int newline=0;
-			for(int i=0;i<256;++i){
-				if(!newline){
-					if(filename[i]=='\n'){
-						filename[i]='\0';
-					}
-				}else{
-					filename[i]='\0';
-				}	
-			}
+			trimFilename(filename);
 			break;
 		}
 	}
@@ -83,5 +104,52 @@ void create_format(){
 		printf("Create/Format fail! Reason:\n%s\n",strerror(errno));
 	}else{
 		printf("Create/Format finished!\n");
+	}
+}
+
+void destroy(){
+	char filename[256];
+	printf("Input disk filename to destroy\n-> ");
+	fgets(filename,256,stdin);
+	trimFilename(filename);
+	switch(myfs_destroy(filename)){
+		case -1:
+			printf("Remove failed! Reason:\n%s\n",strerror(errno));
+			break;
+		case -2:
+			printf("Unmount failed! Reason:\n%s\n",strerror(errno));
+			break;
+		default:
+			printf("Destroy success!\n");
+	}
+}
+
+void mountfs(){
+	char filename[256];
+	printf("Input disk filename to mount:\n-> ");
+	fgets(filename,256,stdin);
+	trimFilename(filename);
+	switch(myfs_mount(filename)){
+		case -1:
+			printf("Can't open file! Reason:\n%s\n",strerror(errno));
+			break;
+		case -2:
+			printf("Unmount failed! Reason:\n%s\n",strerror(errno));
+			break;
+		default:
+			printf("%s mounted!\n",filename);
+	}
+}
+
+void umountfs(){
+	switch(myfs_umount()){
+		case 1:
+			printf("No mounted disk!\n");
+			break;
+		case -1:
+			printf("File close failed! Reason:\n%s\n",strerror(errno));
+			break;
+		default:
+			printf("Unmounted!\n");
 	}
 }

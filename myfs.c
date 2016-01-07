@@ -3,6 +3,7 @@
 #define INODE_SIZE 317
 
 static FILE *mountPoint = NULL;
+static char mountName[256] = "";
 
 int	myfs_create(const char *filesystemname, int max_size){
 	// Open file 
@@ -21,7 +22,6 @@ int	myfs_create(const char *filesystemname, int max_size){
 		inode_count = inode_section/INODE_SIZE;
 	}
 	// Formatting disk file
-	printf("Formatting...\n");
 	for(int i=0;i<max_size;++i){
 		for(unsigned int j=0;j<1048576;++j){
 			fprintf(mountPoint,"%c",0);	
@@ -42,8 +42,7 @@ int	myfs_create(const char *filesystemname, int max_size){
 	fseek(mountPoint,0,SEEK_SET);
 	for (int i = 0; i < 20; i++) {
 		fprintf(mountPoint, "%c",u_Superblock.bytes[i]);
-	}	
-	printf("Finished!\n");
+	}
 
 	// Unmount
 	myfs_umount();
@@ -51,11 +50,26 @@ int	myfs_create(const char *filesystemname, int max_size){
 }
 
 int myfs_destroy(const char *filesystemname){
-	/* TODO */
+	if(!strcmp(mountName,filesystemname)){
+		if(myfs_umount() < 0){
+			return -2;	
+		}
+	}
+	if(remove(filesystemname)){
+		return -1;
+	}
+	return 0;
 }
 
 int myfs_mount(const char *filesystemname){
-	/* TODO */
+	if(myfs_umount() < 0){
+		return -2;
+	}
+	if(!(mountPoint = fopen(filesystemname,"wb+"))){
+		return -1;
+	}
+	strcpy(mountName,filesystemname);
+	return 0;
 }
 
 int myfs_umount(){
@@ -64,7 +78,12 @@ int myfs_umount(){
 			return -1;
 		}
 		mountPoint = NULL;
+		strcpy(mountName,"");
 		return 0;
 	}
 	return 1;
+}
+
+int myfs_file_open(){
+	
 }
