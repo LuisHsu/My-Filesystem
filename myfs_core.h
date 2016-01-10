@@ -12,3 +12,21 @@ typedef struct {
 	int inode_count:24;
 	int inode_unused:24;
 }Superblock;
+
+typedef struct {
+	unsigned char filename[256]; 
+	// filename null means the inode is free
+	unsigned int filesize;
+	unsigned int ptr_direct[12];
+	unsigned int ptr_level_1;
+	unsigned int ptr_level_2;
+	unsigned int ptr_level_3;
+}Inode;
+
+typedef struct {
+	unsigned int level:2;
+	unsigned int entry_count:10;
+	unsigned int reserved:20;
+
+}PtrBlock;
+

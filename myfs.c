@@ -2,6 +2,10 @@
 
 static FILE *mountPoint = NULL;
 static char mountName[256] = "";
+static union{
+			unsigned char bytes[20];
+			Superblock block;
+		}u_Superblock;
 
 int	myfs_create(const char *filesystemname, int max_size){
 	// Open file 
@@ -26,10 +30,6 @@ int	myfs_create(const char *filesystemname, int max_size){
 		}
 	}
 	// Write Superblock
-	union{
-		unsigned char bytes[20];
-		Superblock block;
-	}u_Superblock;
 	u_Superblock.block.block_count = block_count;
 	u_Superblock.block.block_unused= block_count;
 	u_Superblock.block.inode_section_size = inode_section;
@@ -41,7 +41,6 @@ int	myfs_create(const char *filesystemname, int max_size){
 	for (int i = 0; i < 20; i++) {
 		fprintf(mountPoint, "%c",u_Superblock.bytes[i]);
 	}
-
 	// Unmount
 	myfs_umount();
 	return 0;
@@ -63,10 +62,15 @@ int myfs_mount(const char *filesystemname){
 	if(myfs_umount() < 0){
 		return -2;
 	}
-	if(!(mountPoint = fopen(filesystemname,"wb+"))){
+	if(!(mountPoint = fopen(filesystemname,"rb+"))){
 		return -1;
 	}
 	strcpy(mountName,filesystemname);
+	// Read Superblock
+	for(int i=0; i<20; ++i){
+		fscanf(mountPoint,"%c",&u_Superblock.bytes[i]);
+	}
+	fseek(mountPoint,0,SEEK_SET);
 	return 0;
 }
 
@@ -91,7 +95,47 @@ int myfs_file_close(int fd){
 }
 
 int myfs_file_create(const char *filename){
-	/* TODO */	
+	if(mountPoint == NULL){
+		return -1;
+	}
+	if(!u_Superblock.block.inode_unused){
+		return -2;
+	}
+	union{
+		unsigned char bytes[INODE_SIZE];
+		Inode inode;
+	}u_inode;
+	memset(u_inode.bytes,0,INODE_SIZE);
+	strncpy(u_inode.inode.filename,filename,strlen(filename));
+	u_inode.inode.filesize = 0;
+	u_Superblock.block.inode_unused -= 1;
+	
+	// Open disk file
+	FILE *fptr;
+	if(!(fptr = fopen(mountName,"rb+"))){
+		return -3;
+	}
+	// Write superblock
+	for (int i = 0; i < 20; i++) {
+		fprintf(fptr, "%c",u_Superblock.bytes[i]);
+	}
+	// Find empty inode
+	while(ftell(fptr)<(20+u_Superblock.block.inode_section_size)){
+		char buf[256];
+		fgets(buf,256,fptr);
+		if(!strlen(buf)){
+			break;
+		}
+		fseek(fptr,INODE_SIZE - 256,SEEK_CUR);
+	}
+	fseek(fptr,-255,SEEK_CUR);
+	
+	// Write inode
+	for(int i=0; i<INODE_SIZE; ++i){
+		fprintf(fptr,"%c",u_inode.bytes[i]);
+	}
+	fclose(fptr);
+	return 0;
 }
 
 int myfs_file_delete(const char *filename){

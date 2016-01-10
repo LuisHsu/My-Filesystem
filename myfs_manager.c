@@ -11,6 +11,7 @@ void create_format();
 void destroy();
 void mountfs();
 void umountfs();
+void create_file();
 
 int main(int argc, const char *argv[])
 {
@@ -25,7 +26,7 @@ int main(int argc, const char *argv[])
 				break;
 			}
 		}
-		if((!strcmp(Command,"create"))||(!strcmp(Command,"format"))){
+		if((!strcmp(Command,"make"))||(!strcmp(Command,"format"))){
 			while(getchar()!='\n');
 			create_format();
 		}
@@ -41,6 +42,10 @@ int main(int argc, const char *argv[])
 			while(getchar()!='\n');
 			umountfs();
 		}
+		if(!strcmp(Command,"create")){
+			while(getchar()!='\n');
+			create_file();
+		}
 	}
 	return 0;
 }
@@ -49,8 +54,9 @@ void show_help(){
 	printf(
 	"=== Myfs Manager ===\n"
 	"Command List:\n"
-	"create\tformat\tdestroy\n"
+	"make\tformat\tdestroy\n"
 	"mount\tumount\texit\n"
+	"create\n"
 	);
 }
 
@@ -104,6 +110,16 @@ void create_format(){
 		printf("Create/Format fail! Reason:\n%s\n",strerror(errno));
 	}else{
 		printf("Create/Format finished!\n");
+		FILE *fin = fopen(filename,"r");
+		union{
+			unsigned char bytes[20];
+			Superblock superblock;
+		}buf;
+		for(int i=0; i<20; ++i){
+			fscanf(fin,"%c",&buf.bytes[i]);
+		}
+		fclose(fin);
+		printf("%u blocks, %u inodes\n",buf.superblock.block_count,buf.superblock.inode_count);
 	}
 }
 
@@ -151,5 +167,25 @@ void umountfs(){
 			break;
 		default:
 			printf("Unmounted!\n");
+	}
+}
+
+void create_file(){
+	char filename[256];
+	printf("Input filename to create:\n-> ");
+	fgets(filename,256,stdin);
+	trimFilename(filename);
+	switch(myfs_file_create(filename)){
+		case -1:
+			printf("No mounted filesystem!\n");
+			break;
+		case -2:
+			printf("Inode full!\n");
+			break;
+		case -3:
+			printf("Can't write to disk file! Reason:\n%s\n",strerror(errno));
+			break;
+		default:
+			printf("Created!\n");
 	}
 }
