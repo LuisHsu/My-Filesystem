@@ -52,9 +52,24 @@ int myfs_umount();
  * 
  * == RETURN ==
  * nonegative int : File descriptor
- * 
+ * -1 : No mounted filesystem
+ * -2 : Disk empty
+ * -3 : Error opening disk file
+ * -4 : File exists
  */
 int myfs_file_open(const char *filename);
+
+/*** Close file ***/
+/* == DESCRYPTION ==
+ * Close file descriptor
+ * 
+ * == RETURN ==
+ * 0  : Success
+ * -1 : No mounted filesystem
+ * -2 : Disk empty
+ * -3 : Error closing file descriptor
+ * -4 : File discriptor not found
+ */
 int myfs_file_close(int fd);
 
 /*** Create file ***/
@@ -65,10 +80,22 @@ int myfs_file_close(int fd);
  * 0  : Success
  * -1 : No mounted filesystem
  * -2 : No unused inode
- * -3 : Error writing disk file
+ * -3 : File discriptor not found
+ * -4 : File exists
  */
 int myfs_file_create(const char *filename);
 
+/*** Delete file ***/
+/* == DESCRYPTION ==
+ * Delete file from filesystem
+ * 
+ * == RETURN ==
+ * 0  : Success
+ * -1 : No mounted filesystem
+ * -2 : Disk empty
+ * -3 : Error writing disk file
+ * -4 : File exists
+ */
 int myfs_file_delete(const char *filename);
 int myfs_file_read(int fd, char *buf, int count);
 int myfs_file_write(int fd, char *buf, int count);

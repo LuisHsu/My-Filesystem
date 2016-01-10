@@ -14,6 +14,7 @@ void umountfs();
 void create_file(char *filename);
 void delete_file(char *filename);
 void open_file(char *filename);
+void close_file(char *fdStr);
 
 int main(int argc, const char *argv[])
 {
@@ -60,6 +61,12 @@ int main(int argc, const char *argv[])
 		if(!strcmp(Command,"open")){
 			open_file(filename);
 		}
+		if(!strcmp(Command,"close")){
+			close_file(filename);
+		}
+		if(!strcmp(Command,"help")){
+			show_help();
+		}
 	}
 	return 0;
 }
@@ -70,7 +77,7 @@ void show_help(){
 	"Command List:\n"
 	"make\tformat\tdestroy\tmount\n"
 	"umount\texit\tcreate\tdelete\n"
-	"open\n"
+	"open\thelp\n"
 	);
 }
 
@@ -197,7 +204,7 @@ void create_file(char *filename){
 			printf("No mounted filesystem!\n");
 			break;
 		case -2:
-			printf("Inode full!\n");
+			printf("No unused inode!\n");
 			break;
 		case -3:
 			printf("Can't write to disk file! Reason:\n%s\n",strerror(errno));
@@ -256,5 +263,32 @@ void open_file(char *filename){
 			break;
 		default:
 			printf("Opened! File Descriptor: %d\n",fd);
+	}
+}
+
+void close_file(char *fdStr){
+	int fd;
+	if(!strlen(fdStr)){
+		printf("Input file descriptor to close:\n-> ");
+		scanf("%d",&fd);
+	}else{
+		fd = atoi(fdStr);
+	}
+	
+	switch(myfs_file_close(fd)){
+		case -1:
+			printf("No mounted filesystem!\n");
+			break;
+		case -2:
+			printf("There are no file in the disk!\n");
+			break;
+		case -3:
+			printf("Can't close file! Reason:\n%s\n",strerror(errno));
+			break;
+		case -4:
+			printf("File descriptor not found!\n");
+			break;
+		default:
+			printf("Closed!\n");
 	}
 }

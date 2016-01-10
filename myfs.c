@@ -124,9 +124,9 @@ int myfs_file_open(const char *filename){
 	
 	// Insert file descriptor
 	FileDiscriptor *cur = fdHead;
-	if(cur == NULL){
+	if((cur == NULL)||(cur->fd != 0)){
 		newFD->fd = 0;
-		newFD->next = NULL;
+		newFD->next = fdHead;
 		fdHead = newFD;
 		return 0;
 	}
@@ -142,12 +142,39 @@ int myfs_file_open(const char *filename){
 	newFD->fd = (cur->fd) + 1;
 	newFD->next = cur->next;
 	cur->next = newFD;
-	printf("%d\n",newFD->inode_location);
 	return newFD->fd;
 }
 
 int myfs_file_close(int fd){
-	/* TODO */
+	if(mountPoint == NULL){
+		return -1;
+	}
+	if(u_Superblock.block.inode_unused == u_Superblock.block.inode_count){
+		return -2;
+	}
+	// Find fd
+	FileDiscriptor *cur = fdHead, *pre = fdHead;
+	while(1){
+		if(cur == NULL){
+			return -4;
+		}
+		if(cur->fd == fd){
+			break;
+		}
+		pre = cur;
+		cur = cur->next;
+	}
+	// Delete fd
+	if(fclose(cur->fptr)==EOF){
+		return -3;
+	}
+	if(pre == cur){
+		fdHead = cur->next;
+	}else{
+		pre->next = cur->next;
+	}
+	free(cur);	
+	return 0;
 }
 
 int myfs_file_create(const char *filename){
@@ -211,7 +238,6 @@ int myfs_file_delete(const char *filename){
 	if(u_Superblock.block.inode_unused == u_Superblock.block.inode_count){
 		return -2;
 	}
-	
 	// Open disk file
 	FILE *fptr;
 	if(!(fptr = fopen(mountName,"rb+"))){
