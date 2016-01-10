@@ -30,3 +30,8 @@ typedef struct {
 
 }PtrBlock;
 
+typedef struct {
+	unsigned char dirty;
+	unsigned char bytes[1023];
+}Block;
+

@@ -108,27 +108,37 @@ int myfs_file_create(const char *filename){
 	memset(u_inode.bytes,0,INODE_SIZE);
 	strncpy(u_inode.inode.filename,filename,strlen(filename));
 	u_inode.inode.filesize = 0;
-	u_Superblock.block.inode_unused -= 1;
 	
 	// Open disk file
 	FILE *fptr;
 	if(!(fptr = fopen(mountName,"rb+"))){
 		return -3;
 	}
-	// Write superblock
-	for (int i = 0; i < 20; i++) {
-		fprintf(fptr, "%c",u_Superblock.bytes[i]);
-	}
+	fseek(fptr,20,SEEK_SET);
 	// Find empty inode
+	int location = 0;
 	while(ftell(fptr)<(20+u_Superblock.block.inode_section_size)){
 		char buf[256];
 		fgets(buf,256,fptr);
 		if(!strlen(buf)){
-			break;
+			if(!location){
+				location = ftell(fptr)-255;
+			}
 		}
-		fseek(fptr,INODE_SIZE - 256,SEEK_CUR);
+		if(!strcmp(buf,filename)){
+			fclose(fptr);
+			return -4;
+		}
+		fseek(fptr,INODE_SIZE - 255,SEEK_CUR);
 	}
-	fseek(fptr,-255,SEEK_CUR);
+	fseek(fptr,location,SEEK_SET);
+	
+	// Write superblock
+	u_Superblock.block.inode_unused -= 1;
+	for (int i = 0; i < 20; i++) {
+		fprintf(mountPoint, "%c",u_Superblock.bytes[i]);
+	}
+	fseek(mountPoint,0,SEEK_SET);
 	
 	// Write inode
 	for(int i=0; i<INODE_SIZE; ++i){
@@ -139,7 +149,49 @@ int myfs_file_create(const char *filename){
 }
 
 int myfs_file_delete(const char *filename){
-	/* TODO */
+	if(mountPoint == NULL){
+		return -1;
+	}
+	if(u_Superblock.block.inode_unused == u_Superblock.block.inode_count){
+		return -2;
+	}
+	
+	// Open disk file
+	FILE *fptr;
+	if(!(fptr = fopen(mountName,"rb+"))){
+		return -3;
+	}
+	fseek(fptr,20,SEEK_SET);
+	// Find inode
+	int found = 0;
+	while(ftell(fptr)<(20+u_Superblock.block.inode_section_size)){
+		char buf[256];
+		fgets(buf,256,fptr);
+		if(!strcmp(buf,filename)){
+			found = 1;
+			break;
+		}
+		fseek(fptr,INODE_SIZE - 255,SEEK_CUR);
+	}
+	fseek(fptr,-255,SEEK_CUR);
+	
+	if(!found){
+		return -4;
+	}
+	
+	// Write superblock
+	u_Superblock.block.inode_unused += 1;
+	for (int i = 0; i < 20; i++) {
+		fprintf(mountPoint, "%c",u_Superblock.bytes[i]);
+	}
+	fseek(mountPoint,0,SEEK_SET);
+	
+	// Write inode
+	for(int i=0; i<INODE_SIZE; ++i){
+		fprintf(fptr,"%c",0);
+	}
+	fclose(fptr);
+	return 0;
 }
 
 int myfs_file_read(int fd, char *buf, int count){
