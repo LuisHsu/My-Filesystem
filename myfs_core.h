@@ -3,6 +3,8 @@
 #include <errno.h>
 #include <string.h>
 
+#define INODE_SIZE 320
+
 typedef struct {
 	unsigned int block_count:32;
 	unsigned int block_unused:32;

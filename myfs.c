@@ -1,7 +1,5 @@
 #include "myfs.h"
 
-#define INODE_SIZE 317
-
 static FILE *mountPoint = NULL;
 static char mountName[256] = "";
 
@@ -84,6 +82,26 @@ int myfs_umount(){
 	return 1;
 }
 
-int myfs_file_open(){
-	
+int myfs_file_open(const char *filename){
+	/* TODO */
+}
+
+int myfs_file_close(int fd){
+	/* TODO */
+}
+
+int myfs_file_create(const char *filename){
+	/* TODO */	
+}
+
+int myfs_file_delete(const char *filename){
+	/* TODO */
+}
+
+int myfs_file_read(int fd, char *buf, int count){
+	/* TODO */
+}
+
+int myfs_file_write(int fd, char *buf, int count){
+	/* TODO */
 }

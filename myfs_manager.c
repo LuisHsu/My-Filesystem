@@ -91,7 +91,7 @@ void create_format(){
 	}
 
 	while(1){
-		printf("Input filesystem max size(MB)\n** notice: size must <= 1048576 MB **\n-> ");
+		printf("Input filesystem max size(MiB)\n** notice: size must <= 1048576 MiB **\n-> ");
 		scanf("%d",&max_size);
 		if((max_size>1048576)||(max_size<1)){
 			printf("Size over range!\n");
