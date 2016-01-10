@@ -6,6 +6,8 @@ static union{
 			unsigned char bytes[20];
 			Superblock block;
 		}u_Superblock;
+		
+static FileDiscriptor *fdHead = NULL;
 
 int	myfs_create(const char *filesystemname, int max_size){
 	// Open file 
@@ -87,7 +89,61 @@ int myfs_umount(){
 }
 
 int myfs_file_open(const char *filename){
-	/* TODO */
+	if(mountPoint == NULL){
+		return -1;
+	}
+	if(u_Superblock.block.inode_unused == u_Superblock.block.inode_count){
+		return -2;
+	}
+	// Create new fd mode
+	FileDiscriptor *newFD = (FileDiscriptor *)malloc(sizeof(FileDiscriptor));
+	if(!(newFD->fptr = fopen(mountName,"rb+"))){
+		free(newFD);
+		return -3;
+	}
+	
+	// Find inode
+	int found = 0;
+	fseek(newFD->fptr,20,SEEK_SET);
+	while(ftell(newFD->fptr)<(20+u_Superblock.block.inode_section_size)){
+		char buf[256];
+		fgets(buf,256,newFD->fptr);
+		if(!strcmp(buf,filename)){
+			found = 1;
+			break;
+		}
+		fseek(newFD->fptr,INODE_SIZE - 255,SEEK_CUR);
+	}
+	if(!found){
+		fclose(newFD->fptr);
+		free(newFD);
+		return -4;
+	}
+	fseek(newFD->fptr,-255,SEEK_CUR);
+	newFD->inode_location = ftell(newFD->fptr);
+	
+	// Insert file descriptor
+	FileDiscriptor *cur = fdHead;
+	if(cur == NULL){
+		newFD->fd = 0;
+		newFD->next = NULL;
+		fdHead = newFD;
+		return 0;
+	}
+	while(cur->next != NULL){
+		if(cur->next->fd != ((cur->fd) + 1)){
+			newFD->fd = (cur->fd) + 1;
+			newFD->next = cur->next;
+			cur->next = newFD;
+			return newFD->fd;
+		}
+		cur = cur -> next;
+	}
+	newFD->fd = (cur->fd) + 1;
+	newFD->next = cur->next;
+	cur->next = newFD;
+	printf("%d\n",newFD->inode_location);
+	return newFD->fd;
 }
 
 int myfs_file_close(int fd){

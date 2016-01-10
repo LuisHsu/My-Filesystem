@@ -13,6 +13,7 @@ void mountfs(char *filename);
 void umountfs();
 void create_file(char *filename);
 void delete_file(char *filename);
+void open_file(char *filename);
 
 int main(int argc, const char *argv[])
 {
@@ -56,6 +57,9 @@ int main(int argc, const char *argv[])
 		if(!strcmp(Command,"delete")){
 			delete_file(filename);
 		}
+		if(!strcmp(Command,"open")){
+			open_file(filename);
+		}
 	}
 	return 0;
 }
@@ -64,9 +68,9 @@ void show_help(){
 	printf(
 	"=== Myfs Manager ===\n"
 	"Command List:\n"
-	"make\tformat\tdestroy\n"
-	"mount\tumount\texit\n"
-	"create\tdelete\n"
+	"make\tformat\tdestroy\tmount\n"
+	"umount\texit\tcreate\tdelete\n"
+	"open\n"
 	);
 }
 
@@ -227,5 +231,30 @@ void delete_file(char *filename){
 			break;
 		default:
 			printf("Deleted!\n");
+	}
+}
+
+void open_file(char *filename){
+	if(!strlen(filename)){
+		printf("Input filename to open:\n-> ");
+		fgets(filename,256,stdin);
+		trimFilename(filename);
+	}
+	int fd;
+	switch(fd = myfs_file_open(filename)){
+		case -1:
+			printf("No mounted filesystem!\n");
+			break;
+		case -2:
+			printf("There are no file in the disk!\n");
+			break;
+		case -3:
+			printf("Can't write to disk file! Reason:\n%s\n",strerror(errno));
+			break;
+		case -4:
+			printf("File not found!\n");
+			break;
+		default:
+			printf("Opened! File Descriptor: %d\n",fd);
 	}
 }

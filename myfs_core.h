@@ -2,6 +2,7 @@
 #include <math.h>
 #include <errno.h>
 #include <string.h>
+#include <stdlib.h>
 
 #define INODE_SIZE 320
 
@@ -35,3 +36,9 @@ typedef struct {
 	unsigned char bytes[1023];
 }Block;
 
+typedef struct FD{
+	int fd;
+	int inode_location;
+	FILE *fptr;
+	struct FD *next;
+}FileDiscriptor;
