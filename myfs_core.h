@@ -4,7 +4,7 @@
 #include <string.h>
 #include <stdlib.h>
 
-#define INODE_SIZE 320
+#define INODE_SIZE 324
 
 typedef struct {
 	unsigned int block_count:32;
@@ -17,17 +17,20 @@ typedef struct {
 typedef struct {
 	unsigned char filename[256]; 
 	// filename null means the inode is free
-	unsigned int filesize;
 	unsigned int ptr_direct[12];
 	unsigned int ptr_level_1;
 	unsigned int ptr_level_2;
 	unsigned int ptr_level_3;
+	// NOTICE: Value of ptr_X is start from 1
+	unsigned int filesize_L;
+	unsigned char filesize_H;
 }Inode;
 
 typedef struct {
+	unsigned char dirty;
 	unsigned int level:2;
 	unsigned int entry_count:10;
-	unsigned int reserved:20;
+	unsigned int reserved:12;
 
 }PtrBlock;
 

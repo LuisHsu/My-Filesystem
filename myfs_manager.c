@@ -15,6 +15,7 @@ void create_file(char *filename);
 void delete_file(char *filename);
 void open_file(char *filename);
 void close_file(char *fdStr);
+void write_file(char *fdStr);
 
 int main(int argc, const char *argv[])
 {
@@ -67,6 +68,9 @@ int main(int argc, const char *argv[])
 		if(!strcmp(Command,"help")){
 			show_help();
 		}
+		if(!strcmp(Command,"write")){
+			write_file(filename);
+		}
 	}
 	return 0;
 }
@@ -77,7 +81,7 @@ void show_help(){
 	"Command List:\n"
 	"make\tformat\tdestroy\tmount\n"
 	"umount\texit\tcreate\tdelete\n"
-	"open\thelp\n"
+	"open\twrite\thelp\n"
 	);
 }
 
@@ -290,5 +294,39 @@ void close_file(char *fdStr){
 			break;
 		default:
 			printf("Closed!\n");
+	}
+}
+
+void write_file(char *fdStr){
+	int fd;
+	if(!strlen(fdStr)){
+		printf("Input file descriptor to write:\n-> ");
+		scanf("%d",&fd);
+	}else{
+		fd = atoi(fdStr);
+	}
+	int data_size;
+	printf("Input data size:\n-> ");
+	scanf("%d",&data_size);
+	while(getchar()!='\n');
+	char buf[data_size+1];
+	memset(buf,0,data_size+1);
+	printf("Input data:\n-> ");
+	fgets(buf,data_size+1,stdin);
+	switch(myfs_file_write(fd,buf,data_size)){
+		case -1:
+			printf("No mounted filesystem!\n");
+			break;
+		case -2:
+			printf("There are no file in the disk!\n");
+			break;
+		case -3:
+		printf("Block allocate error!\n");
+		break;
+		case -4:
+			printf("File descriptor not found!\n");
+			break;
+		default:
+			printf("Written!\n");
 	}
 }

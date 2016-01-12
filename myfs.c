@@ -9,6 +9,45 @@ static union{
 		
 static FileDiscriptor *fdHead = NULL;
 
+int block_alloc(FILE *fptr){
+	if(u_Superblock.block.block_count < 1){
+		return 0;
+	}
+	unsigned long locSave = ftell(fptr);
+	fseek(fptr,20+u_Superblock.block.inode_section_size,SEEK_SET);
+	unsigned char dirty;
+	unsigned int block_addr = 1;
+	while(block_addr < u_Superblock.block.block_count){
+		fscanf(fptr,"%c",&dirty);
+		if(dirty!='d'){
+			fseek(fptr,-1,SEEK_CUR);
+			fprintf(fptr,"%c",'d');
+			u_Superblock.block.block_unused -= 1;
+			return block_addr;
+		}
+		fseek(fptr,1023,SEEK_CUR);
+		block_addr++;
+	}
+	
+	fseek(fptr,locSave,SEEK_SET);
+	return 0;
+}
+
+int block_locate(unsigned long int filesize, Inode *inode, FILE *fptr){
+	fseek(fptr,20+u_Superblock.block.inode_section_size,SEEK_SET);
+	if(filesize<12276){
+		int index = filesize/1023;
+		if(inode->ptr_direct[index] == 0){ 
+			inode->ptr_direct[index] = block_alloc(fptr);
+			if(inode->ptr_direct[index] == 0){
+				return -1;
+			}
+		}else{
+			fseek(fptr,(inode->ptr_direct[index]-1)*1024+(filesize%1023),SEEK_CUR);
+		}
+	}
+}
+
 int	myfs_create(const char *filesystemname, int max_size){
 	// Open file 
 	if(!(mountPoint = fopen(filesystemname,"wb+"))){
@@ -78,6 +117,14 @@ int myfs_mount(const char *filesystemname){
 
 int myfs_umount(){
 	if (mountPoint != NULL) {
+		FileDiscriptor *cur = fdHead;
+		while(cur!=NULL){
+			FileDiscriptor *tmp = cur;
+			cur = cur->next;
+			fclose(tmp->fptr);
+			free(tmp);
+		}
+		fdHead = NULL;
 		if(fclose(mountPoint)==EOF){
 			return -1;
 		}
@@ -190,7 +237,8 @@ int myfs_file_create(const char *filename){
 	}u_inode;
 	memset(u_inode.bytes,0,INODE_SIZE);
 	strncpy(u_inode.inode.filename,filename,strlen(filename));
-	u_inode.inode.filesize = 0;
+	u_inode.inode.filesize_L = 0;
+	u_inode.inode.filesize_H = 0;
 	
 	// Open disk file
 	FILE *fptr;
@@ -277,9 +325,77 @@ int myfs_file_delete(const char *filename){
 }
 
 int myfs_file_read(int fd, char *buf, int count){
-	/* TODO */
+	/* TODO */	
 }
 
 int myfs_file_write(int fd, char *buf, int count){
-	/* TODO */
+	if(mountPoint == NULL){
+		return -1;
+	}
+	if(u_Superblock.block.inode_unused == u_Superblock.block.inode_count){
+		return -2;
+	}
+	// Find fd
+	FileDiscriptor *cur = fdHead, *pre = fdHead;
+	while(1){
+		if(cur == NULL){
+			return -4;
+		}
+		if(cur->fd == fd){
+			break;
+		}
+		pre = cur;
+		cur = cur->next;
+	}
+	// Read inode
+	fseek(cur->fptr, cur->inode_location, SEEK_SET);
+	union{
+		unsigned char bytes[INODE_SIZE];
+		Inode inode;
+	}u_inode;
+	for(int i=0; i<INODE_SIZE; ++i){
+		fscanf(cur->fptr,"%c",&u_inode.bytes[i]);
+	}
+	fflush(cur->fptr);
+	unsigned long int filesize = (((unsigned long int)u_inode.inode.filesize_H)<<32)+u_inode.inode.filesize_L;
+	
+	// Write data
+	if(block_locate(filesize, &(u_inode.inode), cur->fptr) == -1){
+		return -3;
+	}
+
+	int state = 0;
+	for(int i=0, block_capacity=filesize % 1024; i < count; ++i){
+		if(block_capacity > 1022){
+			fflush(cur->fptr);
+			if(block_locate(filesize, &(u_inode.inode), cur->fptr) == -1){
+				state = -5;
+				break;
+			}
+		}
+		fprintf(cur->fptr,"%c",buf[i]);
+		if(++filesize > 17029540340){
+			state = -6;
+			break;
+		}
+		block_capacity=(block_capacity+1)%1024;
+	}
+	fflush(cur->fptr);
+	// Write inode
+	u_inode.inode.filesize_H = (unsigned char) ((filesize >> 32) & 0xff);
+	u_inode.inode.filesize_L = filesize & 0xFFFFFFFF;
+	fseek(cur->fptr, cur->inode_location, SEEK_SET);
+	for(int i=0; i<INODE_SIZE; ++i){
+		fprintf(cur->fptr,"%c",u_inode.bytes[i]);
+	}
+	fflush(cur->fptr);
+	
+	// Write superblock
+	fseek(cur->fptr,0, SEEK_SET);
+	for(int i=0; i<20; ++i){
+		fprintf(cur->fptr,"%c",u_Superblock.bytes[i]);
+	}
+	fflush(cur->fptr);
+	
+	return state;
 }
