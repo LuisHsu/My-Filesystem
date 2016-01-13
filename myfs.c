@@ -3,7 +3,7 @@
 static FILE *mountPoint = NULL;
 static char mountName[256] = "";
 static union{
-			unsigned char bytes[20];
+			char bytes[20];
 			Superblock block;
 		}u_Superblock;
 		
@@ -28,7 +28,8 @@ int	myfs_create(const char *filesystemname, int max_size){
 	// Formatting disk file
 	for(int i=0;i<max_size;++i){
 		for(unsigned int j=0;j<1048576;++j){
-			fprintf(mountPoint,"%c",0);	
+			char nch = 0;
+			fwrite(&nch,1,1,mountPoint);
 		}
 	}
 	// Write Superblock
@@ -41,7 +42,7 @@ int	myfs_create(const char *filesystemname, int max_size){
 	u_Superblock.block.inode_unused+= inode_count;
 	fseek(mountPoint,0,SEEK_SET);
 	for (int i = 0; i < 20; i++) {
-		fprintf(mountPoint, "%c",u_Superblock.bytes[i]);
+		fwrite(&u_Superblock.bytes[i],1,1,mountPoint);
 	}
 	// Unmount
 	myfs_umount();
@@ -70,8 +71,9 @@ int myfs_mount(const char *filesystemname){
 	strcpy(mountName,filesystemname);
 	// Read Superblock
 	for(int i=0; i<20; ++i){
-		fscanf(mountPoint,"%c",&u_Superblock.bytes[i]);
+		fread(&u_Superblock.bytes[i],1,1,mountPoint);
 	}
+	fflush(mountPoint);
 	fseek(mountPoint,0,SEEK_SET);
 	return 0;
 }
@@ -109,6 +111,7 @@ int myfs_file_open(const char *filename){
 		free(newFD);
 		return -3;
 	}
+	newFD->location = 0;
 	
 	// Find inode
 	int found = 0;
@@ -193,7 +196,7 @@ int myfs_file_create(const char *filename){
 		return -2;
 	}
 	union{
-		unsigned char bytes[INODE_SIZE];
+		char bytes[INODE_SIZE];
 		Inode inode;
 	}u_inode;
 	memset(u_inode.bytes,0,INODE_SIZE);
@@ -228,8 +231,10 @@ int myfs_file_create(const char *filename){
 	// Write superblock
 	u_Superblock.block.inode_unused -= 1;
 	for (int i = 0; i < 20; i++) {
+
 		fprintf(mountPoint, "%c",u_Superblock.bytes[i]);
 	}
+	fflush(mountPoint);
 	fseek(mountPoint,0,SEEK_SET);
 	
 	// Write inode
@@ -249,14 +254,17 @@ void locate_level_delete(FILE *fptr, unsigned int addr, int level){
 	
 	// Read Block
 	union{
-		unsigned char bytes[1024];
+		char bytes[1024];
 		PtrBlock block;
 	}u_PtrBlock;
 	fprintf(fptr,"%c",0);
+	fflush(fptr);
 	fseek(fptr, -1, SEEK_CUR);
 	for(int i=0;i<1024;++i){
-		fscanf(fptr,"%c",&(u_PtrBlock.bytes[i]));
+
+		fread(&(u_PtrBlock.bytes[i]),1,1,fptr);
 	}
+	fflush(fptr);
 	fseek(fptr, -1024, SEEK_CUR);
 	
 	
@@ -330,11 +338,11 @@ int myfs_file_delete(const char *filename){
 	
 	// Read inode
 	union{
-		unsigned char bytes[INODE_SIZE];
+		char bytes[INODE_SIZE];
 		Inode inode;
 	}u_inode;
 	for(int i=0; i<INODE_SIZE; ++i){
-		fscanf(fptr,"%c",&u_inode.bytes[i]);
+		fread(&u_inode.bytes[i],1,1,fptr);
 	}
 	fflush(fptr);
 	
@@ -366,14 +374,14 @@ int locate_level_read(unsigned long int entry_id, FILE *fptr, unsigned int *addr
 	fseek(fptr, ((*addr)-1)*1024, SEEK_CUR);
 	// Read Block
 	union{
-		unsigned char bytes[1024];
+		char bytes[1024];
 		PtrBlock block;
 	}u_PtrBlock;
 	for(int i=0;i<1024;++i){
-		fscanf(fptr,"%c",&(u_PtrBlock.bytes[i]));
+		fread(&(u_PtrBlock.bytes[i]),1,1,fptr);
 	}
+	fflush(fptr);
 	fseek(fptr, -1024, SEEK_CUR);
-	
 	
 	if(level == 1){	
 		if(u_PtrBlock.block.entry[entry_id % 255] == 0){
@@ -387,23 +395,23 @@ int locate_level_read(unsigned long int entry_id, FILE *fptr, unsigned int *addr
 	return 0;
 }
 
-Block *block_locate_read(unsigned long int filesize, FILE *fptr, Inode *inode){
-	if(filesize < 12276){
-		if(inode->ptr_direct[filesize/1023] == 0){
+Block *block_locate_read(unsigned long int fileloc, FILE *fptr, Inode *inode){
+	if(fileloc < 12276){
+		if(inode->ptr_direct[fileloc/1023] == 0){
 			return NULL;
 		}
 		fseek(fptr, 20+u_Superblock.block.inode_section_size, SEEK_SET);
-		fseek(fptr, ((inode->ptr_direct[filesize/1023])-1)*1024, SEEK_CUR);
-	}else if(filesize < 273141){
-		if(locate_level_read((filesize-12276)/1023, fptr, &(inode->ptr_level_1), 1) == -1){
+		fseek(fptr, ((inode->ptr_direct[fileloc/1023])-1)*1024, SEEK_CUR);
+	}else if(fileloc < 273141){
+		if(locate_level_read((fileloc-12276)/1023, fptr, &(inode->ptr_level_1), 1) == -1){
 			return NULL;
 		}
-	}else if(filesize < 1474866144){
-		if(locate_level_read((filesize-273141)/1023, fptr, &(inode->ptr_level_2), 2) == -1){
+	}else if(fileloc < 1474866144){
+		if(locate_level_read((fileloc-273141)/1023, fptr, &(inode->ptr_level_2), 2) == -1){
 			return NULL;
 		}
-	}else if(filesize < 17029540341){
-		if(locate_level_read((filesize-1474866144)/1023, fptr, &(inode->ptr_level_3), 3) == -1){
+	}else if(fileloc < 17029540341){
+		if(locate_level_read((fileloc-1474866144)/1023, fptr, &(inode->ptr_level_3), 3) == -1){
 			return NULL;
 		}
 	}else{
@@ -412,32 +420,34 @@ Block *block_locate_read(unsigned long int filesize, FILE *fptr, Inode *inode){
 		
 	// Read Block
 	Block *ret = (Block *)malloc(sizeof(Block));
-	fscanf(fptr,"%c",&(ret->dirty));
+	fread(&(ret->dirty),1,1,fptr);
 	for(int i=0;i<1023;++i){
-		fscanf(fptr,"%c",&(ret->bytes[i]));
+		fread(&(ret->bytes[i]),1,1,fptr);
 	}
+	fflush(fptr);
 	fseek(fptr, -1024, SEEK_CUR);
 	return ret;
 }
 
-int file_read(char *buf, int size, Inode *inode, FILE *fptr){
-
+int file_read(unsigned long int *fileloc, char *buf, int size, Inode *inode, FILE *fptr){
 	int buf_index = 0;
 	while(buf_index < size){
 		// Locate
-		Block *t_block = block_locate_read(buf_index, fptr, inode);
+		Block *t_block = block_locate_read(*fileloc, fptr, inode);
 		if(t_block == NULL){
 			return -1;
 		}
-		// Fill buf
-		t_block->dirty = 'd';
-		int bound = ((size-buf_index)>1023) ? 1023 : (size-buf_index);
-		for(int i = 0; i < bound; ++i){
-			buf[buf_index++] = t_block->bytes[i];
+		// Fill buffer
+		int offset = ((*fileloc) % 1023);
+		int bound = ((size-buf_index+offset)>1023) ? 1023 : (size-buf_index+offset);
+		for(int i = offset; i < bound; ++i){
+			 buf[buf_index++] = t_block->bytes[i];
 		}
 
-		fflush(fptr);
+		// Update fileloc
+		*fileloc += bound - offset;
 	}
+
 	return 0;
 }
 
@@ -463,19 +473,19 @@ int myfs_file_read(int fd, char *buf, int count){
 	// Read inode
 	fseek(cur->fptr, cur->inode_location, SEEK_SET);
 	union{
-		unsigned char bytes[INODE_SIZE];
+		char bytes[INODE_SIZE];
 		Inode inode;
 	}u_inode;
 	for(int i=0; i<INODE_SIZE; ++i){
-		fscanf(cur->fptr,"%c",&u_inode.bytes[i]);
+		fread(&u_inode.bytes[i],1,1,cur->fptr);
 	}
 	fflush(cur->fptr);
-	unsigned long int filesize = (((unsigned long int)u_inode.inode.filesize_H)<<32)+u_inode.inode.filesize_L;
-	if(filesize < count){
+	unsigned long int filesize = ((((unsigned long int)u_inode.inode.filesize_H)<<32) & 0x300000000)+u_inode.inode.filesize_L;;
+	if(filesize < (cur->location + count)){
 		return -5;
 	}
 	// Read data
-	if(file_read(buf, count, &(u_inode.inode), cur->fptr) == -1){
+	if(file_read(&(cur->location),buf, count, &(u_inode.inode), cur->fptr) == -1){
 		return -3;
 	}
 	return 0;
@@ -486,8 +496,8 @@ unsigned int find_empty_block(FILE *fptr){
 	fseek(fptr, 20+u_Superblock.block.inode_section_size, SEEK_SET);
 	unsigned int block_avail = 1;
 	while(block_avail < u_Superblock.block.block_count){
-		unsigned char dirty;
-		fscanf(fptr,"%c",&dirty);
+		char dirty;
+		fread(&dirty,1,1,fptr);
 		fseek(fptr, -1, SEEK_CUR);
 		if(dirty != 'd'){
 			return block_avail;
@@ -509,14 +519,17 @@ int locate_level_write(unsigned long int entry_id, FILE *fptr, unsigned int *add
 	fseek(fptr, ((*addr)-1)*1024, SEEK_CUR);
 	// Read Block
 	union{
-		unsigned char bytes[1024];
+		char bytes[1024];
 		PtrBlock block;
 	}u_PtrBlock;
-	fprintf(fptr,"%c",'d');
+	char dch = 'd';
+	fwrite(&dch,1,1,fptr);
+	fflush(fptr);
 	fseek(fptr, -1, SEEK_CUR);
 	for(int i=0;i<1024;++i){
-		fscanf(fptr,"%c",&(u_PtrBlock.bytes[i]));
+		fread(&(u_PtrBlock.bytes[i]),1,1,fptr);
 	}
+	fflush(fptr);
 	fseek(fptr, -1024, SEEK_CUR);
 	
 	
@@ -532,7 +545,7 @@ int locate_level_write(unsigned long int entry_id, FILE *fptr, unsigned int *add
 		fseek(fptr,ptrLoc,SEEK_SET);
 		// Write Block
 		for(int i=0; i<1024; ++i){
-			fprintf(fptr,"%c",u_PtrBlock.bytes[i]);
+			fwrite(&u_PtrBlock.bytes[i],1,1,fptr);
 		}
 		fflush(fptr);
 		fseek(fptr, 20+u_Superblock.block.inode_section_size, SEEK_SET);
@@ -543,7 +556,7 @@ int locate_level_write(unsigned long int entry_id, FILE *fptr, unsigned int *add
 		rec_loc = ftell(fptr);
 		fseek(fptr, b_loc, SEEK_SET);
 		for(int i=0;i<1024;++i){
-			fprintf(fptr,"%c",u_PtrBlock.bytes[i]);
+			fwrite(&u_PtrBlock.bytes[i],1,1,fptr);
 		}
 		fflush(fptr);
 		fseek(fptr, rec_loc, SEEK_SET);
@@ -551,31 +564,26 @@ int locate_level_write(unsigned long int entry_id, FILE *fptr, unsigned int *add
 	return 0;
 }
 
-Block *block_locate_write(unsigned long int filesize, FILE *fptr, Inode *inode){
-	if(filesize == 0){
-		inode->ptr_direct[0] = find_empty_block(fptr);
-		if(inode->ptr_direct[0] == 0){
-			return NULL;
-		}
-	}else if(filesize < 12276){
-		if(inode->ptr_direct[filesize/1023] == 0){
-			inode->ptr_direct[filesize/1023] = find_empty_block(fptr);
-			if(inode->ptr_direct[filesize/1023] == 0){
+Block *block_locate_write(unsigned long int fileloc, FILE *fptr, Inode *inode){
+	if(fileloc < 12276){
+		if(inode->ptr_direct[fileloc/1023] == 0){
+			inode->ptr_direct[fileloc/1023] = find_empty_block(fptr);
+			if(inode->ptr_direct[fileloc/1023] == 0){
 				return NULL;
 			}
 		}
 		fseek(fptr, 20+u_Superblock.block.inode_section_size, SEEK_SET);
-		fseek(fptr, ((inode->ptr_direct[filesize/1023])-1)*1024, SEEK_CUR);
-	}else if(filesize < 273141){
-		if(locate_level_write((filesize-12276)/1023, fptr, &(inode->ptr_level_1), 1) == -1){
+		fseek(fptr, ((inode->ptr_direct[fileloc/1023])-1)*1024, SEEK_CUR);
+	}else if(fileloc < 273141){
+		if(locate_level_write((fileloc-12276)/1023, fptr, &(inode->ptr_level_1), 1) == -1){
 			return NULL;
 		}
-	}else if(filesize < 1474866144){
-		if(locate_level_write((filesize-273141)/1023, fptr, &(inode->ptr_level_2), 2) == -1){
+	}else if(fileloc < 1474866144){
+		if(locate_level_write((fileloc-273141)/1023, fptr, &(inode->ptr_level_2), 2) == -1){
 			return NULL;
 		}
-	}else if(filesize < 17029540341){
-		if(locate_level_write((filesize-1474866144)/1023, fptr, &(inode->ptr_level_3), 3) == -1){
+	}else if(fileloc < 17029540341){
+		if(locate_level_write((fileloc-1474866144)/1023, fptr, &(inode->ptr_level_3), 3) == -1){
 			return NULL;
 		}
 	}else{
@@ -584,40 +592,45 @@ Block *block_locate_write(unsigned long int filesize, FILE *fptr, Inode *inode){
 		
 	// Read Block
 	Block *ret = (Block *)malloc(sizeof(Block));
-	fscanf(fptr,"%c",&(ret->dirty));
+	fread(&(ret->dirty),1,1,fptr);
 	for(int i=0;i<1023;++i){
-		fscanf(fptr,"%c",&(ret->bytes[i]));
+		fread(&(ret->bytes[i]),1,1,fptr);
 	}
+	fflush(fptr);
 	fseek(fptr, -1024, SEEK_CUR);
 	return ret;
 }
 
-int file_write(unsigned long int filesize, char *buf, int size, Inode *inode, FILE *fptr){
+int file_write(unsigned long int *fileloc, char *buf, int size, Inode *inode, FILE *fptr){
 	int buf_index = 0;
 	while(buf_index < size){
 		// Locate
-		Block *t_block = block_locate_write(filesize, fptr, inode);
+		Block *t_block = block_locate_write(*fileloc, fptr, inode);
 		if(t_block == NULL){
 			return -1;
 		}
 		// Fill block
 		t_block->dirty = 'd';
-		int offset = (filesize % 1023) - 1;
-		int bound = ((size-buf_index)>1023) ? 1023 : (size-buf_index);
-		for(int i = offset + 1; i < bound; ++i){
+		int offset = ((*fileloc) % 1023);
+		int bound = ((size-buf_index+offset)>1023) ? 1023 : (size-buf_index+offset);
+		for(int i = offset; i < bound; ++i){
 			t_block->bytes[i] = buf[buf_index++];
 		}
 		// Write block
-		fprintf(fptr, "%c", t_block->dirty);
+		fwrite(&t_block->dirty,1,1,fptr);
 		for(int i=0; i<1023; ++i){
-			fprintf(fptr, "%c", t_block->bytes[i]);
+			fwrite(&t_block->bytes[i],1,1,fptr);
 		}
 		fflush(fptr);
-		// Update filesize
-		filesize += bound - (offset + 1);
+		// Update fileloc
+		*fileloc += bound - offset;
 	}
-	inode->filesize_H = (unsigned char) ((filesize >> 32) & 0xff);
-	inode->filesize_L = filesize & 0xFFFFFFFF;
+	unsigned long int filesize = ((((unsigned long int)inode->filesize_H)<<32) & 0x300000000)+inode->filesize_L;
+	if(*fileloc > filesize){
+		filesize = *fileloc;
+		inode->filesize_H = (char) ((filesize >> 32) & 0xff);
+		inode->filesize_L = filesize & 0xFFFFFFFF;
+	}
 	return 0;
 }
 
@@ -643,33 +656,118 @@ int myfs_file_write(int fd, char *buf, int count){
 	// Read inode
 	fseek(cur->fptr, cur->inode_location, SEEK_SET);
 	union{
-		unsigned char bytes[INODE_SIZE];
+		char bytes[INODE_SIZE];
 		Inode inode;
 	}u_inode;
 	for(int i=0; i<INODE_SIZE; ++i){
-		fscanf(cur->fptr,"%c",&u_inode.bytes[i]);
+		fread(&u_inode.bytes[i],1,1,cur->fptr);
 	}
 	fflush(cur->fptr);
-	unsigned long int filesize = (((unsigned long int)u_inode.inode.filesize_H)<<32)+u_inode.inode.filesize_L;
-	
+		
 	// Write data
-	if(file_write(filesize, buf, count, &(u_inode.inode), cur->fptr) == -1){
+	if(file_write(&(cur->location), buf, count, &(u_inode.inode), cur->fptr) == -1){
 		return -3;
 	}
 
 	// Write inode
 	fseek(cur->fptr, cur->inode_location, SEEK_SET);
 	for(int i=0; i<INODE_SIZE; ++i){
-		fprintf(cur->fptr,"%c",u_inode.bytes[i]);
+		fwrite(&u_inode.bytes[i],1,1,cur->fptr);
 	}
 	fflush(cur->fptr);
 	
 	// Write superblock
 	fseek(cur->fptr,0, SEEK_SET);
 	for(int i=0; i<20; ++i){
-		fprintf(cur->fptr,"%c",u_Superblock.bytes[i]);
+		fwrite(&u_Superblock.bytes[i],1,1,cur->fptr);
 	}
 	fflush(cur->fptr);
 	
+	return 0;
+}
+
+FileStatus *myfs_file_list(unsigned int *count){
+	if(mountPoint == NULL){
+		return NULL;
+	}
+	if(u_Superblock.block.inode_unused == u_Superblock.block.inode_count){
+		*count = 0;
+		return NULL;
+	}
+	*count = u_Superblock.block.inode_count - u_Superblock.block.inode_unused;
+	// Create FileStatus array
+	FileStatus *ret = (FileStatus *)malloc(sizeof(FileStatus)*(u_Superblock.block.inode_count - u_Superblock.block.inode_unused));
+	
+	// Scan inode
+	FILE *fptr;
+	if(!(fptr = fopen(mountName,"rb"))){
+		return NULL;
+	}
+	fseek(fptr,20,SEEK_SET);
+	unsigned int fstatus_index = 0;
+	while(ftell(fptr)<(20+u_Superblock.block.inode_section_size)){
+		union{
+			char bytes[INODE_SIZE];
+			Inode inode;
+		}u_inode;
+		for(int i=0; i<INODE_SIZE; ++i){
+			fread(&(u_inode.bytes[i]),1,1,fptr);
+		}
+		fflush(fptr);
+		if(strlen(u_inode.inode.filename)){
+			strcpy(ret[fstatus_index].filename,u_inode.inode.filename);
+			ret[fstatus_index].filesize = ((((unsigned long int)u_inode.inode.filesize_H)<<32) & 0x300000000)+u_inode.inode.filesize_L;
+			++fstatus_index;
+		}
+	}
+	return ret;
+}
+
+int myfs_file_seek(int fd, long int offset, long int origin){
+	if(mountPoint == NULL){
+		return -1;
+	}
+	if(u_Superblock.block.inode_unused == u_Superblock.block.inode_count){
+		return -2;
+	}
+	// Find fd
+	FileDiscriptor *cur = fdHead, *pre = fdHead;
+	while(1){
+		if(cur == NULL){
+			return -4;
+		}
+		if(cur->fd == fd){
+			break;
+		}
+		pre = cur;
+		cur = cur->next;
+	}
+	// Read inode
+	fseek(cur->fptr, cur->inode_location, SEEK_SET);
+	union{
+		char bytes[INODE_SIZE];
+		Inode inode;
+	}u_inode;
+	for(int i=0; i<INODE_SIZE; ++i){
+		fread(&u_inode.bytes[i],1,1,cur->fptr);
+	}
+	fflush(cur->fptr);
+	unsigned long int filesize = ((((unsigned long int)u_inode.inode.filesize_H)<<32) & 0xffffffff)+u_inode.inode.filesize_L;
+	
+	// Macro
+	if(origin == MY_SEEK_CUR){
+		origin = cur->location;
+	}else if(origin == MY_SEEK_SET){
+		origin = 0;
+	}else if(origin == MY_SEEK_END){
+		origin = filesize-1;
+	}
+	
+	// Change offset
+	if(((origin + offset) < 0)||((origin + offset) >= filesize)){
+		return -3;
+	}else{
+		cur->location = origin + offset;
+	}
 	return 0;
 }

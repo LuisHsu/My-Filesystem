@@ -3,6 +3,7 @@
 #include <errno.h>
 #include <string.h>
 #include <stdlib.h>
+#include <limits.h>
 
 #define INODE_SIZE 324
 
@@ -15,7 +16,7 @@ typedef struct {
 }Superblock;
 
 typedef struct {
-	unsigned char filename[256]; 
+	char filename[256]; 
 	// filename null means the inode is free
 	unsigned int ptr_direct[12];
 	unsigned int ptr_level_1;
@@ -23,22 +24,28 @@ typedef struct {
 	unsigned int ptr_level_3;
 	// NOTICE: Value of ptr_X is start from 1
 	unsigned int filesize_L;
-	unsigned char filesize_H;
+	char filesize_H;
 }Inode;
 
 typedef struct {
-	unsigned char dirty;
+	char dirty;
 	unsigned int entry[255];
 }PtrBlock;
 
 typedef struct {
-	unsigned char dirty;
-	unsigned char bytes[1023];
+	char dirty;
+	char bytes[1023];
 }Block;
 
 typedef struct FD{
 	int fd;
 	int inode_location;
+	unsigned long int location;
 	FILE *fptr;
 	struct FD *next;
 }FileDiscriptor;
+
+typedef struct {
+	char filename[256];
+	unsigned long int filesize;
+}FileStatus;

@@ -51,7 +51,7 @@ int myfs_umount();
  * Open file in filesystem
  * 
  * == RETURN ==
- * nonegative int : File descriptor
+ * nonegative integer : File descriptor
  * -1 : No mounted filesystem
  * -2 : Disk empty
  * -3 : Error opening disk file
@@ -97,6 +97,19 @@ int myfs_file_create(const char *filename);
  * -4 : File exists
  */
 int myfs_file_delete(const char *filename);
+
+/*** Read file ***/
+/* == DESCRYPTION ==
+ * Write data to file
+ * 
+ * == RETURN ==
+ * 0  : Success
+ * -1 : No mounted filesystem
+ * -2 : No file in disk
+ * -3 : Error read block
+ * -4 : File descriptor not found
+ * -5 : Count greater then file size
+ */
 int myfs_file_read(int fd, char *buf, int count);
 
 /*** Write file ***/
@@ -109,6 +122,31 @@ int myfs_file_read(int fd, char *buf, int count);
  * -2 : No file in disk
  * -3 : Error allocate block
  * -4 : File descriptor not found
- * -5 : Count greater then file size
  */
 int myfs_file_write(int fd, char *buf, int count);
+
+/*** List file ***/
+/* == DESCRYPTION ==
+ * List file from disk
+ * 
+ * == RETURN ==
+ * FileStatus pointer : Success
+ * NULL : Error or empty
+ */
+FileStatus *myfs_file_list(unsigned int *count);
+
+/*** Seek file ***/
+/* == DESCRYPTION ==
+ * Change offset of file descriptor
+ * 
+ * == RETURN ==
+ * 0  : Success
+ * -1 : No mounted filesystem
+ * -2 : No file in disk
+ * -3 : Error allocate block
+ * -4 : File descriptor not found
+ */
+#define MY_SEEK_SET LONG_MIN
+#define MY_SEEK_CUR 0
+#define MY_SEEK_END LONG_MAX
+int myfs_file_seek(int fd, long int offset, long int origin);

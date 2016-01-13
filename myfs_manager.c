@@ -17,7 +17,10 @@ void open_file(char *filename);
 void close_file(char *fdStr);
 void write_file(char *fdStr);
 void read_file(char *fdStr);
-void save_file(char *filename);
+void push_file(char *filename);
+void pull_file(char *filename);
+void seek_file(char *fdStr);
+void list_file();
 
 int main(int argc, const char *argv[])
 {
@@ -27,7 +30,7 @@ int main(int argc, const char *argv[])
 		printf(">");
 		scanf("%s",Command);
 		memset(filename,0,256);
-		unsigned char catch = 0, hasArg = 0, name_index = 0;
+		char catch = 0, hasArg = 0, name_index = 0;
 		while((catch=getchar())!='\n'){
 			if(!hasArg){
 				if(catch!=' '){
@@ -76,8 +79,17 @@ int main(int argc, const char *argv[])
 		if(!strcmp(Command,"read")){
 			read_file(filename);
 		}
-		if(!strcmp(Command,"save")){
-			save_file(filename);
+		if(!strcmp(Command,"push")){
+			push_file(filename);
+		}
+		if(!strcmp(Command,"pull")){
+			pull_file(filename);
+		}
+		if(!strcmp(Command,"list")){
+			list_file();
+		}
+		if(!strcmp(Command,"seek")){
+			seek_file(filename);
 		}
 	}
 	return 0;
@@ -89,8 +101,8 @@ void show_help(){
 	"Command List:\n"
 	"make\tformat\tdestroy\tmount\n"
 	"umount\texit\tcreate\tdelete\n"
-	"open\twrite\tread\tsave\n"
-	"help\n"
+	"open\twrite\tread\tpush\n"
+	"pull\tlist\tseek\thelp\n"
 	);
 }
 
@@ -146,11 +158,11 @@ void make_format(char *filename){
 		printf("Create/Format finished!\n");
 		FILE *fin = fopen(filename,"r");
 		union{
-			unsigned char bytes[20];
+			char bytes[20];
 			Superblock superblock;
 		}buf;
 		for(int i=0; i<20; ++i){
-			fscanf(fin,"%c",&buf.bytes[i]);
+			fread(&buf.bytes[i],1,1,fin);
 		}
 		fclose(fin);
 		printf("%u blocks, %u inodes\n",buf.superblock.block_count,buf.superblock.inode_count);
@@ -379,9 +391,9 @@ void read_file(char *fdStr){
 	}
 }
 
-void save_file(char *filename){
+void push_file(char *filename){
 	if(!strlen(filename)){
-		printf("Input filename to save:\n-> ");
+		printf("Input filename to push:\n-> ");
 		fgets(filename,256,stdin);
 		trimFilename(filename);
 	}
@@ -405,11 +417,175 @@ void save_file(char *filename){
 	while((data_size = fread(buf,1,1023,fin)) > 0){
 		if((error_code = myfs_file_write(fd,buf,data_size)) < 0){
 			printf("Write error! [%d]\n",error_code);
+			fclose(fin);
+			if((error_code = myfs_file_close(fd)) < 0){
+				printf("File close error! [%d]\n",error_code);
+			}
+			return;
 		}
+		fflush(fin);
 	}
 	fclose(fin);
 	if((error_code = myfs_file_close(fd)) < 0){
-		printf("Close error! [%d]\n",error_code);
+		printf("File close error! [%d]\n",error_code);
 	}
-	printf("%s Saved!\n",filename);
+	printf("%s Pushed!\n",filename);
+}
+
+void list_file(){
+	unsigned int file_count = 1;
+	FileStatus *StatusList = myfs_file_list(&file_count);
+	if(StatusList == NULL){
+		if(file_count == 0){
+			printf("Empty!\n");
+		}else{
+			printf("Error!\n");
+		}
+		return;
+	}
+	
+	for(unsigned int i=0; i<file_count; ++i){
+		printf("%s\t",StatusList[i].filename);
+		if(StatusList[i].filesize > 1073741823){
+			printf("%.2lf GiB\n",StatusList[i].filesize/1073741824.0);
+			continue;
+		}
+		if(StatusList[i].filesize > 1048575){
+			printf("%.2lf MiB\n",StatusList[i].filesize/1048576.0);
+			continue;
+		}
+		if(StatusList[i].filesize > 1023){
+			printf("%.2lf KiB\n",StatusList[i].filesize/1024.0);
+			continue;
+		}
+		printf("%lu Bytes\n",StatusList[i].filesize);
+	}
+	free(StatusList);
+}
+
+void pull_file(char *filename){
+	if(!strlen(filename)){
+		printf("Input filename to push:\n-> ");
+		fgets(filename,256,stdin);
+		trimFilename(filename);
+	}
+	int error_code;
+	// Open file
+	int fd;
+	if((fd = myfs_file_open(filename)) < 0){
+		printf("Unable to open file! [%d]\n",fd);
+		return;
+	}
+	// Open target
+	FILE *fout;
+	if(!(fout = fopen(filename,"wb"))){
+		printf("Unable to open target file!\n");
+		return;
+	}
+	// Get file size
+	unsigned long int filesize;
+	unsigned int fileCount;
+	FileStatus *StatusList = myfs_file_list(&fileCount);
+	if(StatusList == NULL){
+		if(fileCount == 0){
+			printf("Empty!\n");
+		}else{
+			printf("Error get file size!\n");
+		}
+		return;
+	}
+	int found = 0;
+	for(unsigned int i=0; i<fileCount; ++i){
+		if(!strcmp(filename,StatusList[i].filename)){
+			filesize = StatusList[i].filesize;
+			found = 1;
+			break;
+		}
+	}
+	free(StatusList);
+	if(!found){
+		printf("File not found!\n");
+		return;
+	}
+	
+	// Read file
+	char buf[1023];
+	for(unsigned long int i = 0; i < filesize;){
+		int readSize = ((filesize - i) > 1023) ? 1023 : (filesize - i);
+		if((error_code = myfs_file_read(fd,buf,readSize)) < 0){
+			printf("Read error! [%d]\n",error_code);
+			fclose(fout);
+			if((error_code = myfs_file_close(fd)) < 0){
+				printf("File close error! [%d]\n",error_code);
+			}
+			return;
+		}
+		if(fwrite(buf,1,readSize,fout) == 0){
+			printf("Target write error!\n");
+			fclose(fout);
+			if((error_code = myfs_file_close(fd)) < 0){
+				printf("File close error! [%d]\n",error_code);
+			}
+			return;
+		}
+		i += readSize;
+		fflush(fout);
+	}
+	// Close file
+	fclose(fout);
+	if((error_code = myfs_file_close(fd)) < 0){
+		printf("File close error! [%d]\n",error_code);
+		return;
+	}
+	// Delete file
+	if((error_code = myfs_file_delete(filename)) < 0){
+		printf("File delete error! [%d]\n",error_code);
+		return;
+	}
+	printf("%s Pulled!\n",filename);
+}
+
+void seek_file(char *fdStr){
+	int fd;
+	if(!strlen(fdStr)){
+		printf("Input file descriptor to seek:\n-> ");
+		scanf("%d",&fd);
+	}else{
+		fd = atoi(fdStr);
+	}
+	long int offset;
+	printf("Input offset:\n-> ");
+	scanf("%ld",&offset);
+	while(getchar()!='\n');
+	long int origin;
+	printf("Input origin:\n-> ");
+	char origin_str[20];
+	scanf("%s",origin_str);
+	while(getchar()!='\n');
+	if(!strcmp(origin_str,"SEEK_SET")){
+		origin = MY_SEEK_SET;
+	}else if(!strcmp(origin_str,"SEEK_CUR")){
+		origin = MY_SEEK_CUR;
+	}else if(!strcmp(origin_str,"SEEK_END")){
+		origin = MY_SEEK_END;
+	}else{
+		origin = atol(origin_str);
+	}
+	
+	switch(myfs_file_seek(fd,offset,origin)){
+		case -1:
+			printf("No mounted filesystem!\n");
+			break;
+		case -2:
+			printf("There are no file in the disk!\n");
+			break;
+		case -3:
+			printf("Block read error!\n");
+		break;
+		case -4:
+			printf("File descriptor not found!\n");
+			break;
+		default:
+			printf("Seek file descriptor %d !\n",fd);
+	}
 }
