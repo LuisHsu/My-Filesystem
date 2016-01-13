@@ -14,6 +14,7 @@ clean:
 
 $(LIB):$(OBJS)
 	@ar rcs $(LIB) $(OBJS)
+	@rm $(OBJS)
 
 lib:$(LIB)
 
