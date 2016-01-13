@@ -306,24 +306,80 @@ unsigned int find_empty_block(FILE *fptr){
 	return 0;
 }
 
+int locate_level(unsigned long int entry_id, FILE *fptr, unsigned int *addr, int level){
+	if(*addr == 0){
+		*addr = find_empty_block(fptr);
+		if(*addr == 0){
+			return -1;
+		}
+	}
+	fseek(fptr, 20+u_Superblock.block.inode_section_size, SEEK_SET);
+	fseek(fptr, ((*addr)-1)*1024, SEEK_CUR);
+	// Read Block
+	union{
+		unsigned char bytes[1024];
+		PtrBlock block;
+	}u_PtrBlock;
+	fprintf(fptr,"%c",'d');
+	fseek(fptr, -1, SEEK_CUR);
+	for(int i=0;i<1024;++i){
+		fscanf(fptr,"%c",&(u_PtrBlock.bytes[i]));
+	}
+	fseek(fptr, -1024, SEEK_CUR);
+	
+	
+	if(level == 1){	
+		unsigned long int ptrLoc = ftell(fptr);
+		if(u_PtrBlock.block.entry[entry_id] == 0){
+			u_PtrBlock.block.entry[entry_id] = find_empty_block(fptr);
+			if(u_PtrBlock.block.entry[entry_id] == 0){
+				return -1;
+			}
+			
+		}
+		fseek(fptr,ptrLoc,SEEK_SET);
+		// Write Block
+		for(int i=0; i<1024; ++i){
+			fprintf(fptr,"%c",u_PtrBlock.bytes[i]);
+		}
+		fflush(fptr);
+		fseek(fptr, 20+u_Superblock.block.inode_section_size, SEEK_SET);
+		fseek(fptr, ((u_PtrBlock.block.entry[entry_id])-1)*1024, SEEK_CUR);
+	}else{
+		unsigned long b_loc = ftell(fptr), rec_loc;
+		locate_level(entry_id/255, fptr, &u_PtrBlock.block.entry[entry_id/(int)pow(255,level-1)], level-1);
+		rec_loc = ftell(fptr);
+		fseek(fptr, b_loc, SEEK_SET);
+		for(int i=0;i<1024;++i){
+			fprintf(fptr,"%c",u_PtrBlock.bytes[i]);
+		}
+		fflush(fptr);
+		fseek(fptr, rec_loc, SEEK_SET);
+	}
+	return 0;
+}
+
 Block *block_locate(unsigned long int filesize, FILE *fptr, Inode *inode){
 	if(filesize == 0){
 		inode->ptr_direct[0] = find_empty_block(fptr);
 		if(inode->ptr_direct[0] == 0){
 			return NULL;
 		}
-	}else{
-		if(filesize < 12276){
+	}else if(filesize < 12276){
+		if(inode->ptr_direct[filesize/1023] == 0){
+			inode->ptr_direct[filesize/1023] = find_empty_block(fptr);
 			if(inode->ptr_direct[filesize/1023] == 0){
-				inode->ptr_direct[filesize/1023] = find_empty_block(fptr);
-				if(inode->ptr_direct[filesize/1023] == 0){
-					return NULL;
-				}
+				return NULL;
 			}
-			fseek(fptr, 20+u_Superblock.block.inode_section_size, SEEK_SET);
-			fseek(fptr, ((inode->ptr_direct[filesize/1023])-1)*1024, SEEK_CUR);
+		}
+		fseek(fptr, 20+u_Superblock.block.inode_section_size, SEEK_SET);
+		fseek(fptr, ((inode->ptr_direct[filesize/1023])-1)*1024, SEEK_CUR);
+	}else if(filesize < 273141){
+		if(locate_level((filesize-12276)/1023, fptr, &(inode->ptr_level_1), 1) == -1){
+			return NULL;
 		}
 	}
+	// Read Block
 	Block *ret = (Block *)malloc(sizeof(Block));
 	fscanf(fptr,"%c",&(ret->dirty));
 	for(int i=0;i<1023;++i){

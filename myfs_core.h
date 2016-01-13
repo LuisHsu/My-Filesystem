@@ -28,10 +28,7 @@ typedef struct {
 
 typedef struct {
 	unsigned char dirty;
-	unsigned int level:2;
-	unsigned int entry_count:10;
-	unsigned int reserved:12;
-
+	unsigned int entry[255];
 }PtrBlock;
 
 typedef struct {
