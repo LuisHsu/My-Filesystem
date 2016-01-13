@@ -98,4 +98,17 @@ int myfs_file_create(const char *filename);
  */
 int myfs_file_delete(const char *filename);
 int myfs_file_read(int fd, char *buf, int count);
+
+/*** Write file ***/
+/* == DESCRYPTION ==
+ * Write data to file
+ * 
+ * == RETURN ==
+ * 0  : Success
+ * -1 : No mounted filesystem
+ * -2 : No file in disk
+ * -3 : Error allocate block
+ * -4 : File descriptor not found
+ * -5 : Count greater then file size
+ */
 int myfs_file_write(int fd, char *buf, int count);

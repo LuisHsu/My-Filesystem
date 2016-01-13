@@ -16,6 +16,7 @@ void delete_file(char *filename);
 void open_file(char *filename);
 void close_file(char *fdStr);
 void write_file(char *fdStr);
+void read_file(char *fdStr);
 
 int main(int argc, const char *argv[])
 {
@@ -71,6 +72,9 @@ int main(int argc, const char *argv[])
 		if(!strcmp(Command,"write")){
 			write_file(filename);
 		}
+		if(!strcmp(Command,"read")){
+			read_file(filename);
+		}
 	}
 	return 0;
 }
@@ -81,7 +85,7 @@ void show_help(){
 	"Command List:\n"
 	"make\tformat\tdestroy\tmount\n"
 	"umount\texit\tcreate\tdelete\n"
-	"open\twrite\thelp\n"
+	"open\twrite\tread\thelp\n"
 	);
 }
 
@@ -321,12 +325,51 @@ void write_file(char *fdStr){
 			printf("There are no file in the disk!\n");
 			break;
 		case -3:
-		printf("Block allocate error!\n");
+			printf("Block allocate error!\n");
 		break;
 		case -4:
 			printf("File descriptor not found!\n");
 			break;
 		default:
 			printf("Written!\n");
+	}
+}
+
+void read_file(char *fdStr){
+	int fd;
+	if(!strlen(fdStr)){
+		printf("Input file descriptor to read:\n-> ");
+		scanf("%d",&fd);
+	}else{
+		fd = atoi(fdStr);
+	}
+	int data_size;
+	printf("Input read size:\n-> ");
+	scanf("%d",&data_size);
+	while(getchar()!='\n');
+	char buf[data_size+1];
+	memset(buf,0,data_size+1);
+	switch(myfs_file_read(fd,buf,data_size)){
+		case -1:
+			printf("No mounted filesystem!\n");
+			break;
+		case -2:
+			printf("There are no file in the disk!\n");
+			break;
+		case -3:
+			printf("Block read error!\n");
+		break;
+		case -4:
+			printf("File descriptor not found!\n");
+			break;
+		case -5:
+			printf("Read size too big!\n");
+			break;
+		default:
+			printf("== content ==\n");
+			for(int i=0; i<data_size; ++i){
+				printf("%c",buf[i]);
+			}
+			printf("\n== Successful read! ==\n");
 	}
 }
