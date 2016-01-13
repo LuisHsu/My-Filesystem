@@ -55,7 +55,7 @@ int myfs_umount();
  * -1 : No mounted filesystem
  * -2 : Disk empty
  * -3 : Error opening disk file
- * -4 : File exists
+ * -4 : File not exists
  */
 int myfs_file_open(const char *filename);
 
@@ -80,7 +80,7 @@ int myfs_file_close(int fd);
  * 0  : Success
  * -1 : No mounted filesystem
  * -2 : No unused inode
- * -3 : File discriptor not found
+ * -3 : Disk file discriptor not found
  * -4 : File exists
  */
 int myfs_file_create(const char *filename);
@@ -143,7 +143,7 @@ FileStatus *myfs_file_list(unsigned int *count);
  * 0  : Success
  * -1 : No mounted filesystem
  * -2 : No file in disk
- * -3 : Error allocate block
+ * -3 : Overflowed
  * -4 : File descriptor not found
  */
 #define MY_SEEK_SET LONG_MIN
