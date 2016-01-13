@@ -240,6 +240,64 @@ int myfs_file_create(const char *filename){
 	return 0;
 }
 
+void locate_level_delete(FILE *fptr, unsigned int addr, int level){
+	if(addr == 0){
+		return;
+	}
+	fseek(fptr, 20+u_Superblock.block.inode_section_size, SEEK_SET);
+	fseek(fptr, (addr-1)*1024, SEEK_CUR);
+	
+	// Read Block
+	union{
+		unsigned char bytes[1024];
+		PtrBlock block;
+	}u_PtrBlock;
+	fprintf(fptr,"%c",0);
+	fseek(fptr, -1, SEEK_CUR);
+	for(int i=0;i<1024;++i){
+		fscanf(fptr,"%c",&(u_PtrBlock.bytes[i]));
+	}
+	fseek(fptr, -1024, SEEK_CUR);
+	
+	
+	if(level == 1){	
+		for(int i=0; i<255; ++i){
+			if(u_PtrBlock.block.entry[i] == 0){
+				continue;
+			}
+			fseek(fptr, 20+u_Superblock.block.inode_section_size, SEEK_SET);
+			fseek(fptr, ((u_PtrBlock.block.entry[i])-1)*1024, SEEK_CUR);
+			// Write Block
+			fprintf(fptr,"%c",0);
+			fflush(fptr);
+		}
+	}else{
+		for(int i=0; i<255; ++i){
+			locate_level_delete(fptr, u_PtrBlock.block.entry[i], level-1);
+		}
+	}
+}
+
+void block_delete_all(FILE *fptr, Inode *inode){
+	for(int i=0; i<12; ++i){
+		if(inode->ptr_direct[i]!=0){
+			fseek(fptr, 20+u_Superblock.block.inode_section_size, SEEK_SET);
+			fseek(fptr, ((inode->ptr_direct[i])-1)*1024, SEEK_CUR);
+			fprintf(fptr,"%c",0);
+			fflush(fptr);
+		}
+	}
+	if(inode->ptr_level_1!=0){
+		locate_level_delete(fptr,inode->ptr_level_1,1);
+	}
+	if(inode->ptr_level_2!=0){
+		locate_level_delete(fptr,inode->ptr_level_2,2);
+	}
+	if(inode->ptr_level_3!=0){
+		locate_level_delete(fptr,inode->ptr_level_3,3);
+	}
+}
+
 int myfs_file_delete(const char *filename){
 	if(mountPoint == NULL){
 		return -1;
@@ -265,19 +323,34 @@ int myfs_file_delete(const char *filename){
 		fseek(fptr,INODE_SIZE - 255,SEEK_CUR);
 	}
 	fseek(fptr,-255,SEEK_CUR);
-	
 	if(!found){
 		return -4;
 	}
+	unsigned long int inode_loc = ftell(fptr);
 	
+	// Read inode
+	union{
+		unsigned char bytes[INODE_SIZE];
+		Inode inode;
+	}u_inode;
+	for(int i=0; i<INODE_SIZE; ++i){
+		fscanf(fptr,"%c",&u_inode.bytes[i]);
+	}
+	fflush(fptr);
+	
+	// Release block
+	block_delete_all(fptr,&(u_inode.inode));
+		
 	// Write superblock
 	u_Superblock.block.inode_unused += 1;
 	for (int i = 0; i < 20; i++) {
 		fprintf(mountPoint, "%c",u_Superblock.bytes[i]);
 	}
+	fflush(mountPoint);
 	fseek(mountPoint,0,SEEK_SET);
 	
 	// Write inode
+	fseek(fptr,inode_loc,SEEK_SET);
 	for(int i=0; i<INODE_SIZE; ++i){
 		fprintf(fptr,"%c",0);
 	}

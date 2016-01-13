@@ -17,6 +17,7 @@ void open_file(char *filename);
 void close_file(char *fdStr);
 void write_file(char *fdStr);
 void read_file(char *fdStr);
+void save_file(char *filename);
 
 int main(int argc, const char *argv[])
 {
@@ -75,6 +76,9 @@ int main(int argc, const char *argv[])
 		if(!strcmp(Command,"read")){
 			read_file(filename);
 		}
+		if(!strcmp(Command,"save")){
+			save_file(filename);
+		}
 	}
 	return 0;
 }
@@ -85,7 +89,8 @@ void show_help(){
 	"Command List:\n"
 	"make\tformat\tdestroy\tmount\n"
 	"umount\texit\tcreate\tdelete\n"
-	"open\twrite\tread\thelp\n"
+	"open\twrite\tread\tsave\n"
+	"help\n"
 	);
 }
 
@@ -372,4 +377,39 @@ void read_file(char *fdStr){
 			}
 			printf("\n== Successful read! ==\n");
 	}
+}
+
+void save_file(char *filename){
+	if(!strlen(filename)){
+		printf("Input filename to save:\n-> ");
+		fgets(filename,256,stdin);
+		trimFilename(filename);
+	}
+	int error_code;
+	if((error_code = myfs_file_create(filename)) != 0){
+		printf("Unable to create file! [%d]\n",error_code);
+		return;
+	}
+	int fd;
+	if((fd = myfs_file_open(filename)) < 0){
+		printf("Unable to open file! [%d]\n",fd);
+		return;
+	}
+	FILE *fin;
+	if(!(fin = fopen(filename,"rb"))){
+		printf("Unable to open source file!\n");
+		return;
+	}
+	char buf[1023];
+	int data_size;
+	while((data_size = fread(buf,1,1023,fin)) > 0){
+		if((error_code = myfs_file_write(fd,buf,data_size)) < 0){
+			printf("Write error! [%d]\n",error_code);
+		}
+	}
+	fclose(fin);
+	if((error_code = myfs_file_close(fd)) < 0){
+		printf("Close error! [%d]\n",error_code);
+	}
+	printf("%s Saved!\n",filename);
 }
