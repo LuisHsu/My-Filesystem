@@ -330,9 +330,9 @@ int locate_level(unsigned long int entry_id, FILE *fptr, unsigned int *addr, int
 	
 	if(level == 1){	
 		unsigned long int ptrLoc = ftell(fptr);
-		if(u_PtrBlock.block.entry[entry_id] == 0){
-			u_PtrBlock.block.entry[entry_id] = find_empty_block(fptr);
-			if(u_PtrBlock.block.entry[entry_id] == 0){
+		if(u_PtrBlock.block.entry[entry_id % 255] == 0){
+			u_PtrBlock.block.entry[entry_id % 255] = find_empty_block(fptr);
+			if(u_PtrBlock.block.entry[entry_id % 255] == 0){
 				return -1;
 			}
 			
@@ -344,10 +344,11 @@ int locate_level(unsigned long int entry_id, FILE *fptr, unsigned int *addr, int
 		}
 		fflush(fptr);
 		fseek(fptr, 20+u_Superblock.block.inode_section_size, SEEK_SET);
-		fseek(fptr, ((u_PtrBlock.block.entry[entry_id])-1)*1024, SEEK_CUR);
+		fseek(fptr, ((u_PtrBlock.block.entry[entry_id % 255])-1)*1024, SEEK_CUR);
 	}else{
 		unsigned long b_loc = ftell(fptr), rec_loc;
-		locate_level(entry_id/255, fptr, &u_PtrBlock.block.entry[entry_id/(int)pow(255,level-1)], level-1);
+
+		locate_level(entry_id, fptr, &(u_PtrBlock.block.entry[entry_id/(int)pow(255,level-1)]), level-1);
 		rec_loc = ftell(fptr);
 		fseek(fptr, b_loc, SEEK_SET);
 		for(int i=0;i<1024;++i){
@@ -378,7 +379,13 @@ Block *block_locate(unsigned long int filesize, FILE *fptr, Inode *inode){
 		if(locate_level((filesize-12276)/1023, fptr, &(inode->ptr_level_1), 1) == -1){
 			return NULL;
 		}
+	}else if(filesize < 1474866144){
+		if(locate_level((filesize-273141)/1023, fptr, &(inode->ptr_level_2), 2) == -1){
+			return NULL;
+		}
 	}
+	
+	
 	// Read Block
 	Block *ret = (Block *)malloc(sizeof(Block));
 	fscanf(fptr,"%c",&(ret->dirty));
